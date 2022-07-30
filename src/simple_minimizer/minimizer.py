@@ -130,6 +130,7 @@ class SimpleMinimizer(object):
         self.traceOpen()        # open output stream if requested
         self.traceOut()         # dump starting point if we have a trace file
         self.fRadialScale = 1.0
+        nReason = 0    # reason for quiting
         while True:
             self.fSecondBest = self.fBest;    # record old best value
 
@@ -139,17 +140,21 @@ class SimpleMinimizer(object):
             self.fRadialScale *= 0.3183098861; # ~1/pi (any ~irrational will do)
             nCount += 1
             if self.nMaxIterations < nCount:   # bail out if we are stuck
+                nReason = -1
                 break;
                 
             # for floating-point minimiation 0.001 is a reasonable tolerance
             if (self.fBest+self.fSecondBest) == 0:
+                nReason = 1
                 break
             elif (abs(self.fBest-self.fSecondBest)/(self.fBest+self.fSecondBest) <= 0.001):
+                nReason = 2
                 break
             elif (self.fRadialScale <= self.fMinimumScale):
+                nReason = 3
                 break
 
-        return (nCount, self.lstHistory[-1]);
+        return (nCount, self.lstHistory[-1], nReason);
 
     # utility for single-axis minimization
     def minimizeOne(self, nAxis):
