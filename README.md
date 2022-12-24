@@ -38,7 +38,6 @@ Simple usage example:
 from math import sqrt
 
 from simple_minimizer import *
-from simple_vertex import *
 
 nDimension = 3
 
