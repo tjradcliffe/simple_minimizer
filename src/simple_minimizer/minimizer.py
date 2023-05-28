@@ -1,4 +1,4 @@
-# Copyright (C) 2018 TJ Radcliffe
+# Copyright (C) 2018, 2023 TJ Radcliffe
 # Licenced under GPL 3.0
 
 from .vertex import CopyVertex, EmptyVertex, SimpleVertex
@@ -6,6 +6,9 @@ from .vertex import CopyVertex, EmptyVertex, SimpleVertex
 import copy
 from math import sqrt
 import random
+
+mapConvergenceReasons = {-1: "Exceeded iteration limit", 1: "Closest points indistinguishable", 
+                                                2: "Met fractional tolerance", 3:"Minimum scale achieved"}
 
 """ Simple minimizer class applies a simple sequential axial minimization.
 It does a simple bracketing followed by a parabolic interpolation to 
@@ -30,7 +33,10 @@ class SimpleMinimizer(object):
         self.lstHistory = [EmptyVertex(nDimension)]
 
         # The scale along each axis (used to determine sampling sphere)
-        self.lstScales = [1.0 for nI in range(0, nDimension)]
+        self.lstScales = [1.0 for nI in range(nDimension)]
+
+        # Set the order or lock out dimensions
+        self.lstOrder = [nI for nI in range(nDimension)]
 
         # The points that did not improve things
         self.lstBadPoints = []
@@ -40,6 +46,9 @@ class SimpleMinimizer(object):
 
         # The radial scale at which to stop minimizing
         self.fMinimumScale = 0.001
+        
+        # Fractional tolerance to quit
+        self.fFractionalTolerance = 0.001
 
         # The maximum number of iterations of the outermost loop before giving up
         self.nMaxIterations = 1000
@@ -69,10 +78,30 @@ class SimpleMinimizer(object):
     # Set the scale for a given axis.  This determines the initial range of search
     def setScale(self, nAxis, fScale):
         self.lstScales[nAxis] = fScale
+
+    # Disable minimization on a given dimension
+    def disableAxis(self, nAxis):
+        self.lstMask[nAxis] = -1
+
+    # Enable minimization on a given dimension (will place it in axis order)
+    def enableAxis(self, nAxis):
+        self.lstMask[nAxis] = nAxis
+        
+    # Determines when we are close enough to minumum (default is 0.001)
+    def setFractionalTolerance(self, fFractionalTolerance):
+        self.fFractionalTolerance = fFractionalTolerance
         
     # Set the scales (initial range of search) for all axes
     def setScales(self, lstScales):
         self.lstScales = lstScales
+
+    # Set the order of minimization. -1 means omit. Use carefully!
+    def setOrder(self, lstOrder):
+        self.lstOrder = lstOrder
+
+    # Reset the order of minimization to the default (in axis order)
+    def resetOrder(self, lstOrder):
+        self.lstOrder = [nI for nI in range(self.nDimension)]
 
     # Set the starting position on a given axis
     def setStart(self, nAxis, fStart):
@@ -110,6 +139,10 @@ class SimpleMinimizer(object):
     def getMinimum(self):
         return self.lstHistory[-1].getVertex()
 
+    # Get reason for convergence
+    def getConvergenceReason(self, nReason):
+        return mapConvergenceReasons[nReason]
+
     # Axial minimization
     def minimize(self, lstStart = None):
         """
@@ -134,8 +167,9 @@ class SimpleMinimizer(object):
         while True:
             self.fSecondBest = self.fBest;    # record old best value
 
-            for nAxis in range(0, self.nDimension):
-                self.fBest = self.minimizeOne(nAxis);    # minimize along the given axis
+            for nAxis in self.lstOrder:
+                if nAxis >= 0 and nAxis < self.nDimension:
+                    self.fBest = self.minimizeOne(nAxis);    # minimize along the given axis
 
             self.fRadialScale *= 0.3183098861; # ~1/pi (any ~irrational will do)
             nCount += 1
@@ -147,7 +181,7 @@ class SimpleMinimizer(object):
             if (self.fBest+self.fSecondBest) == 0:
                 nReason = 1
                 break
-            elif (abs(self.fBest-self.fSecondBest)/(self.fBest+self.fSecondBest) <= 0.001):
+            elif (abs(self.fBest-self.fSecondBest)/(self.fBest+self.fSecondBest) <= self.fFractionalTolerance):
                 nReason = 2
                 break
             elif (self.fRadialScale <= self.fMinimumScale):

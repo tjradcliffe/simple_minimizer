@@ -64,7 +64,7 @@ minimizer.setObjective(test)
 # nReason = -1 => failed to converge, 1 => best/second-best equal, 2 => ratio < 0.001, 3 => minimum scale
 (nCount, vertex, nReason) = minimizer.minimize()
 lstVertex = vertex.getVertex() # extract the list of floats from the vertex object
-fValue = vertext.getValue() # the value of the objective function at the minimum
+fValue = vertex.getValue() # the value of the objective function at the minimum
 fError = sqrt(sum([(nI-lstVertex[nI])**2 for nI in range(0,nDimension)])/nDimension)
 print(fError < 0.001)
 print(nCount < 10)
