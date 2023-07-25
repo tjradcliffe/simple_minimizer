@@ -18,7 +18,8 @@ independent: your objective will have diagonal "troughs"
 due to the ability of one axis to trade off against another.
 
 In general you are not minimizing in a vector space, and if you are the
-scales on different axes are often wildly different.
+scales on different axes are often wildly different. Scales on each
+axis can be set via setScale(nAxis, fScale) prior to minimization.
 
 The value of the objective function should be strictly positive over the
 domain, and ideally around 1.0 near the minimum, where "around"

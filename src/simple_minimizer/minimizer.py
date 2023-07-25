@@ -7,9 +7,6 @@ import copy
 from math import sqrt
 import random
 
-# cross product
-from numpy import cross
-
 mapConvergenceReasons = {-1: "Exceeded iteration limit", 1: "Closest points indistinguishable", 
                                                 2: "Met fractional tolerance", 3:"Minimum scale achieved"}
 
