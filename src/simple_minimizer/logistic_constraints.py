@@ -10,7 +10,6 @@ class LowerLogisticConstraint:
             self.fScale = abs(fLevel)
         self.fL = 4*self.fScale # leading factor
         self.fThreshold = fLevel+2*self.fScale # point where constraint kicks in
-        print(self.fLevel, self.fScale, self.fThreshold)
 
     def __call__(self, fX):
         if fX < self.fThreshold:
@@ -31,7 +30,6 @@ class UpperLogisticConstraint:
             self.fScale = abs(fLevel)
         self.fL = 4*self.fScale # leading factor
         self.fThreshold = fLevel-2*self.fScale # point where constraint kicks in
-        print(self.fLevel, self.fScale, self.fThreshold)
 
     def __call__(self, fX):
         if fX > self.fThreshold:

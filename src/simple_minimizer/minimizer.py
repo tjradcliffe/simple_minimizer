@@ -7,8 +7,29 @@ import copy
 from math import sqrt
 import random
 
+# cross product
+from numpy import cross
+
 mapConvergenceReasons = {-1: "Exceeded iteration limit", 1: "Closest points indistinguishable", 
                                                 2: "Met fractional tolerance", 3:"Minimum scale achieved"}
+
+class SimpleMinimum:
+    
+    def __init__(self, nAxis, lowerVertex, middleVertex, upperVertex):
+        self.nAxis = nAxis
+        self.lowerVertex = lowerVertex
+        self.middleVertex = middleVertex
+        self.upperVertex = upperVertex
+        self.fDepth = 0.5*(lowerVertex.fValue+upperVertex.fValue)-middleVertex.fValue
+    
+    def __lt__(self, other):
+        return self.fDepth < other.fDepth
+        
+    def __str__(self):
+        return self.__repr()
+
+    def __repr__(self):
+        return " ".join(map(str, (self.nAxis, self.middleVertex, self.fDepth)))
 
 """ Simple minimizer class applies a simple sequential axial minimization.
 It does a simple bracketing followed by a parabolic interpolation to 
@@ -18,7 +39,7 @@ of decoupling parameters during registration.  If you have an objective
 function that goes negative, add a constant to it that is sufficient to
 get the minimum around +1.
 """
-class SimpleMinimizer(object):
+class SimpleMinimizer:
     
     # Constructor sets dimensions of arrays
     def __init__(self, nDimension):
@@ -143,13 +164,71 @@ class SimpleMinimizer(object):
     def getConvergenceReason(self, nReason):
         return mapConvergenceReasons[nReason]
 
+    def adaptiveMinimize(self, lstStart = None):
+        """This is still an axial minimizer, but it figures out the order of
+        the axes to minimize along rather than requiring the user to do it.
+        As always, efficiency is not an option."""
+        if lstStart:
+            self.setStarts(lstStart)
+        
+        self.fBest = 1.e8;   # not close to any likely value
+
+        # evaluate starting point
+        nCount = 0
+        self.lstHistory[-1].setValue(self.pObjective(self.lstHistory[-1].getVertex()))
+
+        # generate collection of minima along each axis
+        while True:
+            self.fSecondBest = self.fBest;    # record old best value
+            lstMinima = []
+            lstStart = self.lstHistory[-1]
+            for nAxis in range(self.nDimension):            
+                lower = EmptyVertex(self.nDimension)
+                middle = EmptyVertex(self.nDimension)
+                CopyVertex(middle, lstStart)
+                upper = EmptyVertex(self.nDimension)
+                bFound = self.bracket(nAxis,lower,middle,upper)
+                if bFound:
+                    lstMinima.append(SimpleMinimum(nAxis, lower, middle, upper))
+                # skip axis of not able to bracket
+            
+            lstMinima.sort()
+            lstMinima.reverse()
+            for pMinimum in lstMinima:
+                nAxis = pMinimum.nAxis
+                self.fBest = self.parabolic(nAxis, pMinimum.lowerVertex, pMinimum.middleVertex, pMinimum.upperVertex)        
+
+            self.fRadialScale *= 0.3183098861; # ~1/pi (any ~irrational will do)
+            nCount += 1
+            if self.nMaxIterations < nCount:   # bail out if we are stuck
+                nReason = -1
+                break;
+                
+            # Various reasons for quiting:
+            if (self.fBest+self.fSecondBest) == 0:
+                nReason = 1
+                break
+            elif (abs(self.fBest-self.fSecondBest)/(self.fBest+self.fSecondBest) <= self.fFractionalTolerance):
+                nReason = 2
+                break
+            elif (self.fRadialScale <= self.fMinimumScale):
+                nReason = 3
+                break
+
+        return (nCount, self.lstHistory[-1], nReason);
+
     # Axial minimization
     def minimize(self, lstStart = None):
         """
         Minimize by minimizations along successive axes.  This is the same
         techinque used in the original pseudo-correlation work, and it has the
         advantage of decoupling the rotation from the translation as much as
-        possible.
+        possible. This is really intended for "anatomical" cases where there are
+        well-defined axes that are largely independent of each other. The ordering
+        of axial minimizations can be controlled using lstOrder, and the 
+        system still works pretty well for cases where the axes aren't all
+        that independent, but for a lot of cases adaptiveMinimize() may
+        work better, as it figures out the optimal ordering of axes as it goes.
         """
         if lstStart:
             self.setStarts(lstStart)
@@ -177,7 +256,7 @@ class SimpleMinimizer(object):
                 nReason = -1
                 break;
                 
-            # for floating-point minimiation 0.001 is a reasonable tolerance
+            # Various reasons for quiting:
             if (self.fBest+self.fSecondBest) == 0:
                 nReason = 1
                 break
@@ -215,35 +294,42 @@ class SimpleMinimizer(object):
             # and two higher points on either side.  We do a single parabolic
             # step to try to improve things
 
-            fA = lower.getVertex()[nAxis]     # do parabolic fit
-            fB = middle.getVertex()[nAxis] 
-            fC = upper.getVertex()[nAxis]  
-            fFa = lower.getValue() 
-            fFb = middle.getValue() 
-            fFc = upper.getValue() 
+            fValue = self.parabolic(nAxis, lower, middle, upper)
+        
+        return fValue
+            
+    def parabolic(self, nAxis, lower, middle, upper):
+        """Take a single parabolic step"""
+        
+        fA = lower.getVertex()[nAxis]     # do parabolic fit
+        fB = middle.getVertex()[nAxis] 
+        fC = upper.getVertex()[nAxis]  
+        fFa = lower.getValue() 
+        fFb = middle.getValue() 
+        fFc = upper.getValue() 
 
-            fBA = fB - fA
-            fBC = fB - fC
-            fTop = fBA*fBA*(fFb-fFc)-fBC*fBC*(fFb-fFa);
-            fBot = fBA*(fFb-fFc)-fBC*(fFb-fFa);
+        fBA = fB - fA
+        fBC = fB - fC
+        fTop = fBA*fBA*(fFb-fFc)-fBC*fBC*(fFb-fFa);
+        fBot = fBA*(fFb-fFc)-fBC*(fFb-fFa);
 
-            fDistance = 0.0
-            if (0 == fBot):  # NO DIFFERENCE--RETURN EARLY
-                self.lstHistory.append(self.lstHistory[-1])
-                self.traceOut()  # trace progress if requested
-                return self.lstHistory[-1].getValue() 
-            else:
-                fDistance = -0.5*fTop/fBot     # distance from middle
+        fDistance = 0.0
+        if (0 == fBot):  # NO DIFFERENCE--RETURN EARLY
+            self.lstHistory.append(self.lstHistory[-1])
+            self.traceOut()  # trace progress if requested
+            return self.lstHistory[-1].getValue() 
+        else:
+            fDistance = -0.5*fTop/fBot     # distance from middle
 
-            middle.incrementVertex(nAxis, fDistance)
-            fValue = self.pObjective(middle.getVertex())
-            if (fValue > self.lstHistory[-1].getValue()): # no improvement
-                fValue = self.lstHistory[-1].getValue()
-                self.traceOut() # trace progress if requested
-            else:
-                middle.setValue(fValue) 
-                self.lstHistory.append(middle) 
-                self.traceOut()  # trace progress if requested
+        middle.incrementVertex(nAxis, fDistance)
+        fValue = self.pObjective(middle.getVertex())
+        if (fValue > self.lstHistory[-1].getValue()): # no improvement
+            fValue = self.lstHistory[-1].getValue()
+            self.traceOut() # trace progress if requested
+        else:
+            middle.setValue(fValue) 
+            self.lstHistory.append(middle) 
+            self.traceOut()  # trace progress if requested
 
         return fValue
 
@@ -325,39 +411,3 @@ class SimpleMinimizer(object):
     # Close the trace file
     def traceClose(self):
         self.pOutStream = None
-
-if __name__ == "__main__":
-    
-    nDimension = 3
-    
-    class Test(object):
-        def __init__(self):
-            self.lstOrigin = [nI for nI in range(0,nDimension)]
-                
-        def __call__(self, lstVertex):
-            fSum = 0.0
-            for nI in range(0, nDimension):
-                fSum += (self.lstOrigin[nI]-lstVertex[nI])**2
-                
-            fSum += 1.0
-            
-            return sqrt(fSum/nDimension)
-    
-    minimizer = SimpleMinimizer(nDimension)
-    test = Test()
-    minimizer.setObjective(test)
-
-    # test bracketing.  We are starting at [0,0,0] and the minimum
-    # is at [0, 1, 2]
-    
-    lower = EmptyVertex(nDimension)
-    middle = EmptyVertex(nDimension)
-    upper = EmptyVertex(nDimension)
-    bFound = minimizer.bracket(0,lower,middle,upper)
-    print(((lower.getValue() > middle.getValue()) and (upper.getValue() > middle.getValue())))
-
-    (nCount, vertex) = minimizer.minimize()
-    lstVertex = vertex.getVertex()
-    fError = sqrt(sum([(nI-lstVertex[nI])**2 for nI in range(0,nDimension)])/nDimension)
-    print(fError < 0.001)
-    print(nCount < 10)

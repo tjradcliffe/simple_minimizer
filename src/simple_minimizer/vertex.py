@@ -11,7 +11,7 @@ def CopyVertex(v1, v2):
     v1.fDistance = v2.fDistance
 
 # Helper class to hold vertex data
-class SimpleVertex(object):
+class SimpleVertex:
     
     def __init__(self, lstVertex, fValue, fDistance):
         

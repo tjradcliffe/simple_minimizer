@@ -3,7 +3,9 @@
 This minimizer was designed to be brutally simple and extremely
 robust. The original aim was primarily multi-model image registration
 during the development of the pseudo-correlation image registration
-algorithm for online portal imaging and other applications.
+algorithm for online portal imaging and other applications. This means
+it works best on systems with clearly defined ("anatomical") axes
+that are largely independent of each other.
 
 It uses a combination of bracketing and parabolic interpolation to
 get the job done. It is not designed for speed.
@@ -31,6 +33,11 @@ best depends on the scale of the noise on the objective function: if the
 noise is smooth on the scale of the minimum lowest value works well, if
 the noise is rough on the scale of the minimum majority of minima within
 a small region works well.)
+
+Version 2 has an alternative algorithm implemented in the adaptiveMinimize()
+method, which will try to work out what is the best ordering of axes to 
+minimize on by looking at the depth of the bracketed minimum. It is still
+largely experimental.
 
 Simple usage example:
 
